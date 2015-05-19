@@ -22,6 +22,11 @@ from ur_driver.deserializeRT import RobotStateRT
 from ur_msgs.srv import SetPayload, SetIO
 from ur_msgs.msg import *
 
+import csv
+
+# Samples
+samples = []
+
 # renaming classes
 DigitalIn = Digital
 DigitalOut = Digital
@@ -467,6 +472,21 @@ class CommanderTCPHandler(SocketServer.BaseRequestHandler):
     def send_quit(self):
         with self.socket_lock:
             self.request.send(struct.pack("!i", MSG_QUIT))
+
+    def send_movej(self, waypoint_id, q_actual, a, v, t, r):
+        assert(len(q_actual) == 6)
+        q_robot = [0.0] * 6
+        for i, q in enumerate(q_actual):
+            q_robot[i] = q - joint_offsets.get(joint_names[i], 0.0)
+        params = [MSG_MOVEJ, waypoint_id] + \
+                 [MULT_jointstate * qq for qq in q_robot] + \
+                 [MULT_jointstate * a] + \
+                 [MULT_jointstate * v] + \
+                 [MULT_time * t] + \
+                 [MULT_blend * r]
+        buf = struct.pack("!%ii" % len(params), *params)
+        with self.socket_lock:
+            self.request.send(buf)
 
     def send_servoj(self, waypoint_id, q_actual, t):
         assert(len(q_actual) == 6)
@@ -961,6 +981,17 @@ def main():
     
     set_io_server()
     
+    # Read trajectory samples
+    movejDone = False
+
+    with open('/home/arennuit/DevRoot/traj_q.csv', "rb") as csvfile:
+        csvData = csv.reader(csvfile, delimiter=',', quotechar='|')
+
+        # Store the samples.
+        for row in csvData:
+            samples.append([float(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])])
+
+    # Service loop: (re)connects robot and prevent programming.
     service_provider = None
     action_server = None
     try:
@@ -1002,6 +1033,14 @@ def main():
                 else:
                     action_server = URTrajectoryFollower(r, rospy.Duration(1.0))
                     action_server.start()
+
+                # Hack: movej robot in initial configuration.
+                if not movejDone:
+                    degreeToRadian = math.pi / 180.0
+                    r.send_movej(999, samples[0], 3, 0.75, 2.0, 0)
+                    setConnectedRobot(False)
+                    movejDone = True
+                    time.sleep(3.0)
 
     except KeyboardInterrupt:
         try:
