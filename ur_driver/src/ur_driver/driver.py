@@ -26,6 +26,7 @@ import csv
 
 # Samples
 samples_in = []
+goalReceived = False
 
 # renaming classes
 DigitalIn = Digital
@@ -788,6 +789,9 @@ class URTrajectoryFollower(object):
             self.traj = goal_handle.get_goal().trajectory
             self.goal_handle.set_accepted()
 
+            global goalReceived
+            goalReceived = True
+
     def on_cancel(self, goal_handle):
         log("on_cancel")
         if goal_handle == self.goal_handle:
@@ -813,9 +817,10 @@ class URTrajectoryFollower(object):
 
     last_now = time.time()
     def _update(self, event):
-        if self.robot and self.traj:
+        global goalReceived
+        if self.robot and goalReceived:
             now = time.time()
-            if (now - self.traj_t0) <= self.traj.points[-1].time_from_start.to_sec():
+            if self.i < len(samples_in) - 1:
                 self.last_point_sent = False #sending intermediate points
                 try:
                     self.robot.send_servoj(999, samples_in[self.i], 4 * self.RATE)
