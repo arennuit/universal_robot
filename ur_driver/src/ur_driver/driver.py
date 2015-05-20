@@ -25,8 +25,15 @@ from ur_msgs.msg import *
 import csv
 
 # Samples
-samples_in = []
 goalReceived = False
+
+samples_in = []
+samples_out = []
+ar_lock = threading.Lock()
+ar_q = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+filePath_in =  '/home/arennuit/DevRoot/traj_04_2_tipQ_in.csv'
+filePath_out = '/home/arennuit/DevRoot/traj_04_4_tipQ_out.csv'
 
 # renaming classes
 DigitalIn = Digital
@@ -350,6 +357,12 @@ class URConnectionRT(object):
         pub_joint_states.publish(msg)
         with last_joint_states_lock:
             last_joint_states = msg
+
+        global ar_lock
+        global ar_q
+        ar_lock.acquire()
+        ar_q = stateRT.q_actual
+        ar_lock.release()
         
         wrench_msg = WrenchStamped()
         wrench_msg.header.stamp = now
@@ -818,12 +831,28 @@ class URTrajectoryFollower(object):
     last_now = time.time()
     def _update(self, event):
         global goalReceived
+        global samples_in
+        global samples_out
         if self.robot and goalReceived:
             now = time.time()
             if self.i < len(samples_in) - 1:
                 self.last_point_sent = False #sending intermediate points
                 try:
                     self.robot.send_servoj(999, samples_in[self.i], 4 * self.RATE)
+
+                    # Read joint angles.
+                    global ar_lock
+                    global ar_q
+                    ar_lock.acquire()
+                    read_q = ar_q
+                    ar_lock.release()
+                    samples_out[self.i][0] = read_q[0]
+                    samples_out[self.i][1] = read_q[1]
+                    samples_out[self.i][2] = read_q[2]
+                    samples_out[self.i][3] = read_q[3]
+                    samples_out[self.i][4] = read_q[4]
+                    samples_out[self.i][5] = read_q[5]
+
                 except socket.error:
                     pass
                 self.i = self.i + 1
@@ -848,6 +877,27 @@ class URTrajectoryFollower(object):
                 try:
                     self.robot.send_servoj(999, samples_in[-1], 4 * self.RATE)
                     self.last_point_sent = True
+
+                    # Read joint angles.
+                    global ar_lock
+                    global ar_q
+                    ar_lock.acquire()
+                    read_q = ar_q
+                    ar_lock.release()
+                    samples_out[self.i][0] = read_q[0]
+                    samples_out[self.i][1] = read_q[1]
+                    samples_out[self.i][2] = read_q[2]
+                    samples_out[self.i][3] = read_q[3]
+                    samples_out[self.i][4] = read_q[4]
+                    samples_out[self.i][5] = read_q[5]
+
+                    # Save joint angles.
+                    global filePath_out
+                    with open(filePath_out, 'wb') as csvfile:
+                        csvDataWriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+                        for lineIdx in range(len(samples_in)):
+                            csvDataWriter.writerow([samples_out[lineIdx][0], samples_out[lineIdx][1], samples_out[lineIdx][2], samples_out[lineIdx][3], samples_out[lineIdx][4], samples_out[lineIdx][5]])
+
                 except socket.error:
                     pass
                     
@@ -989,13 +1039,17 @@ def main():
     
     # Read trajectory samples
     movejDone = False
+    global samples_in
+    global samples_out
 
-    with open('/home/arennuit/DevRoot/traj_03_targetQ.csv', "rb") as csvfile:
-        csvData = csv.reader(csvfile, delimiter=',', quotechar='|')
+    global filePath_in
+    with open(filePath_in, "rb") as csvfile:
+        csvDataReader = csv.reader(csvfile, delimiter=',', quotechar='|')
 
         # Store the samples.
-        for row in csvData:
+        for row in csvDataReader:
             samples_in.append([float(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])])
+            samples_out.append([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
     # Service loop: (re)connects robot and prevent programming.
     service_provider = None
