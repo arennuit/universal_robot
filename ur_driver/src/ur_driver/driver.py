@@ -25,7 +25,7 @@ from ur_msgs.msg import *
 import csv
 
 # Samples
-samples = []
+samples_in = []
 
 # renaming classes
 DigitalIn = Digital
@@ -697,6 +697,8 @@ class URTrajectoryFollower(object):
 
         self.update_timer = rospy.Timer(rospy.Duration(self.RATE), self._update)
 
+        self.i = 0
+
     def set_robot(self, robot):
         # Cancels any goals in progress
         if self.goal_handle:
@@ -815,11 +817,11 @@ class URTrajectoryFollower(object):
             now = time.time()
             if (now - self.traj_t0) <= self.traj.points[-1].time_from_start.to_sec():
                 self.last_point_sent = False #sending intermediate points
-                setpoint = sample_traj(self.traj, now - self.traj_t0)
                 try:
-                    self.robot.send_servoj(999, setpoint.positions, 4 * self.RATE)
+                    self.robot.send_servoj(999, samples_in[self.i], 4 * self.RATE)
                 except socket.error:
                     pass
+                self.i = self.i + 1
                     
             elif not self.last_point_sent:
                 # All intermediate points sent, sending last point to make sure we
@@ -837,10 +839,9 @@ class URTrajectoryFollower(object):
                                 (now - self.traj_t0, self.traj.points[-1].time_from_start.to_sec()))
                     rospy.logwarn("Desired: %s\nactual: %s\nvelocity: %s" % \
                                           (last_point.positions, state.position, state.velocity))
-                setpoint = sample_traj(self.traj, self.traj.points[-1].time_from_start.to_sec())
 
                 try:
-                    self.robot.send_servoj(999, setpoint.positions, 4 * self.RATE)
+                    self.robot.send_servoj(999, samples_in[-1], 4 * self.RATE)
                     self.last_point_sent = True
                 except socket.error:
                     pass
@@ -984,12 +985,12 @@ def main():
     # Read trajectory samples
     movejDone = False
 
-    with open('/home/arennuit/DevRoot/traj_q.csv', "rb") as csvfile:
+    with open('/home/arennuit/DevRoot/traj_03_targetQ.csv', "rb") as csvfile:
         csvData = csv.reader(csvfile, delimiter=',', quotechar='|')
 
         # Store the samples.
         for row in csvData:
-            samples.append([float(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])])
+            samples_in.append([float(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])])
 
     # Service loop: (re)connects robot and prevent programming.
     service_provider = None
@@ -1037,7 +1038,7 @@ def main():
                 # Hack: movej robot in initial configuration.
                 if not movejDone:
                     degreeToRadian = math.pi / 180.0
-                    r.send_movej(999, samples[0], 3, 0.75, 2.0, 0)
+                    r.send_movej(999, samples_in[0], 3, 0.75, 2.0, 0)
                     setConnectedRobot(False)
                     movejDone = True
                     time.sleep(3.0)
