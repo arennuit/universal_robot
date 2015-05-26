@@ -32,8 +32,8 @@ samples_out = []
 ar_lock = threading.Lock()
 ar_q = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-filePath_in =  '/home/arennuit/DevRoot/traj_04_2_tipQ_in.csv'
-filePath_out = '/home/arennuit/DevRoot/traj_04_4_tipQ_out.csv'
+filePath_in =  '/home/arennuit/DevRoot/traj_20_2_tipQ_in.csv'
+filePath_out = '/home/arennuit/DevRoot/traj_20_4_tipQ_out.csv'
 
 # renaming classes
 DigitalIn = Digital
@@ -691,6 +691,7 @@ class URServiceProvider(object):
 
 class URTrajectoryFollower(object):
     RATE = 0.02
+    MULTIPLIER = 4
     def __init__(self, robot, goal_time_tolerance=None):
         self.goal_time_tolerance = goal_time_tolerance or rospy.Duration(0.0)
         self.joint_goal_tolerances = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
@@ -838,7 +839,7 @@ class URTrajectoryFollower(object):
             if self.i < len(samples_in) - 1:
                 self.last_point_sent = False #sending intermediate points
                 try:
-                    self.robot.send_servoj(999, samples_in[self.i], 4 * self.RATE)
+                    self.robot.send_servoj(999, samples_in[self.i], self.MULTIPLIER * self.RATE)
 
                     # Read joint angles.
                     global ar_lock
@@ -875,7 +876,7 @@ class URTrajectoryFollower(object):
                                           (last_point.positions, state.position, state.velocity))
 
                 try:
-                    self.robot.send_servoj(999, samples_in[-1], 4 * self.RATE)
+                    self.robot.send_servoj(999, samples_in[-1], self.MULTIPLIER * self.RATE)
                     self.last_point_sent = True
 
                     # Read joint angles.
