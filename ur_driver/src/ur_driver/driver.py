@@ -502,14 +502,16 @@ class CommanderTCPHandler(SocketServer.BaseRequestHandler):
         with self.socket_lock:
             self.request.send(buf)
 
-    def send_servoj(self, waypoint_id, q_actual, t):
+    def send_servoj(self, waypoint_id, q_actual, t, pinIdx, pinState):
         assert(len(q_actual) == 6)
         q_robot = [0.0] * 6
         for i, q in enumerate(q_actual):
             q_robot[i] = q - joint_offsets.get(joint_names[i], 0.0)
         params = [MSG_SERVOJ, waypoint_id] + \
                  [MULT_jointstate * qq for qq in q_robot] + \
-                 [MULT_time * t]
+                 [MULT_time * t] + \
+                 [pinIdx] + \
+                 [pinState]
         buf = struct.pack("!%ii" % len(params), *params)
         with self.socket_lock:
             self.request.send(buf)
@@ -839,7 +841,7 @@ class URTrajectoryFollower(object):
             if self.i < len(samples_in) - 1:
                 self.last_point_sent = False #sending intermediate points
                 try:
-                    self.robot.send_servoj(999, samples_in[self.i], self.MULTIPLIER * self.RATE)
+                    self.robot.send_servoj(999, samples_in[self.i], self.MULTIPLIER * self.RATE, 0, False)
 
                     # Read joint angles.
                     global ar_lock
@@ -876,7 +878,7 @@ class URTrajectoryFollower(object):
                                           (last_point.positions, state.position, state.velocity))
 
                 try:
-                    self.robot.send_servoj(999, samples_in[-1], self.MULTIPLIER * self.RATE)
+                    self.robot.send_servoj(999, samples_in[-1], self.MULTIPLIER * self.RATE, 0, False)
                     self.last_point_sent = True
 
                     # Read joint angles.

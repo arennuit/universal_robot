@@ -146,9 +146,9 @@ def driverProg():
         send_out("movej finished")
       elif mtype == MSG_SERVOJ:
         # Reads the parameters
-        params_mult = socket_read_binary_integer(1+6+1)
+        params_mult = socket_read_binary_integer(1+6+1+2)
         if params_mult[0] == 0:
-          send_out("Received no parameters for movej message")
+          send_out("Received no parameters for servoj message")
         end
         
         # Unpacks the parameters
@@ -160,11 +160,21 @@ def driverProg():
                    params_mult[6] / MULT_jointstate,
                    params_mult[7] / MULT_jointstate]
         t = params_mult[8] / MULT_time
+        pinIdx = params_mult[9]
+        pinState = params_mult[10]
         
         # Servos
         #servoj(q, 3, 0.1, t)
         #send_waypoint_finished(waypoint_id)
         set_servo_setpoint(waypoint_id, q, t)
+
+        # Handle output.
+        if pinState > 0:
+           set_digital_out(pinIdx, True)
+        elif pinState == 0:
+          set_digital_out(pinIdx, False)
+        end
+
       elif mtype == MSG_SET_PAYLOAD:
         params = socket_read_binary_integer(1)
         if params[0] == 0:
