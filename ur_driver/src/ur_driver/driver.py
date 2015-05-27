@@ -28,12 +28,14 @@ import csv
 goalReceived = False
 
 samples_in = []
+paintState_in = []
 samples_out = []
 ar_lock = threading.Lock()
 ar_q = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-filePath_in =  '/home/arennuit/DevRoot/traj_20_2_tipQ_in.csv'
-filePath_out = '/home/arennuit/DevRoot/traj_20_4_tipQ_out.csv'
+filePath_in =           '/home/arennuit/DevRoot/traj_1000_2_tipQ_in.csv'
+filePath_inPaintState = '/home/arennuit/DevRoot/traj_1000_8_trigger_paint_gun.csv'
+filePath_out =          '/home/arennuit/DevRoot/traj_1000_4_tipQ_out.csv'
 
 # renaming classes
 DigitalIn = Digital
@@ -841,7 +843,8 @@ class URTrajectoryFollower(object):
             if self.i < len(samples_in) - 1:
                 self.last_point_sent = False #sending intermediate points
                 try:
-                    self.robot.send_servoj(999, samples_in[self.i], self.MULTIPLIER * self.RATE, 0, False)
+                    self.robot.send_servoj(999, samples_in[self.i], self.MULTIPLIER * self.RATE, 0, paintState_in[self.i])
+                    print paintState_in[self.i]
 
                     # Read joint angles.
                     global ar_lock
@@ -1053,6 +1056,14 @@ def main():
         for row in csvDataReader:
             samples_in.append([float(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])])
             samples_out.append([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+    global filePath_inPaintState
+    with open(filePath_inPaintState, "rb") as csvFile_paintState:
+        csvDataReader_paintState = csv.reader(csvFile_paintState, delimiter=',', quotechar='|')
+
+        # Store the samples.
+        for row in csvDataReader_paintState:
+            paintState_in.append(int(row[0]))
 
     # Service loop: (re)connects robot and prevent programming.
     service_provider = None
